@@ -39,13 +39,14 @@ async def handle_max_message(message):
 
         print(f"[MAX] Новое сообщение из чата {chat_id}: {text[:30]}...")
 
-        if text and bot is not None:
-            forward_text = f"<b>{sender}:</b>\n{text}"
-            try:
-                await bot.send_message(chat_id=TG_CHAT_ID, text=forward_text)
-                print(f"-> Переслано в Telegram")
-            except Exception as e:
-                print(f"-> Ошибка отправки в Telegram: {e}")
+        if TARGET_MAX_CHAT_ID == "0" or not TARGET_MAX_CHAT_ID or str(chat_id) == str(TARGET_MAX_CHAT_ID):
+            if text and bot is not None:
+                forward_text = f"<b>{sender}:</b>\n{text}"
+                try:
+                    await bot.send_message(chat_id=TG_CHAT_ID, text=forward_text)
+                    print(f"-> Переслано в Telegram")
+                except Exception as e:
+                    print(f"-> Ошибка отправки в Telegram: {e}")
 
     except Exception as e:
         print(f"Ошибка при обработке сообщения: {e}")
