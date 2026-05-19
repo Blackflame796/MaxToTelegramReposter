@@ -34,8 +34,22 @@ async def handle_max_message(message):
         text = getattr(message, 'text', str(message))
 
         sender = "Кто-то"
-        if hasattr(message, 'sender') and message.sender:
-            sender = getattr(message.sender, 'first_name', "Пользователь")
+        
+        sender_obj = getattr(message, 'sender', None) or getattr(message, 'from_user', None)
+        if sender_obj:
+            first_name = getattr(sender_obj, 'first_name', None)
+            last_name = getattr(sender_obj, 'last_name', None)
+            name = getattr(sender_obj, 'name', None)
+            title = getattr(sender_obj, 'title', None)
+            username = getattr(sender_obj, 'username', None)
+            
+            if first_name and last_name:
+                sender = f"{first_name} {last_name}"
+            else:
+                sender = first_name or name or title or username or "Пользователь"
+                
+            if sender == "Пользователь":
+                print(f"[DEBUG] Не удалось найти имя. Доступные атрибуты: {dir(sender_obj)}")
 
         print(f"[MAX] Новое сообщение из чата {chat_id}: {text[:30]}...")
 
