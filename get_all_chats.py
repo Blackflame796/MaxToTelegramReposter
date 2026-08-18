@@ -4,49 +4,74 @@ from dotenv import load_dotenv
 from pymax import SocketMaxClient
 from pymax.payloads import UserAgentPayload
 
+# Загружаем переменные из .env
 load_dotenv()
 
 MAX_PHONE = os.getenv('MAX_PHONE')
-INVITE_LINK = "https://max.ru/join/U2MW3iXqOG_1iMS0Rn0jD4QCbvUgZwBpWus9bboheGc"
+
+if not MAX_PHONE:
+    print("ОШИБКА: Задайте MAX_PHONE в файле .env")
+    exit(1)
 
 ua = UserAgentPayload(device_type="DESKTOP", app_version="25.12.13")
 client = SocketMaxClient(phone=MAX_PHONE, work_dir="cache", headers=ua)
 
 
-async def get_chat_id_from_link(link: str):
+async def main():
+    print("========================================")
+    print(f"Подключение к Max ({MAX_PHONE})...")
+    print("========================================")
+
     await client.start()
-    
-    # Извлекаем хэш инвайта из конца ссылки
-    invite_hash = link.split('/')[-1].replace("join?", "").replace("invite=", "")
-    print(f"Обработка хэша: {invite_hash}\n")
+    print("Успешное подключение!\n")
 
     try:
-        # Пробуем получить информацию о чате по ссылке/хэшу
-        # В зависимости от версии pymax метод может называться get_chat_by_invite, resolve_invite или get_chat
-        chat_info = None
+        chats = await client.get_chats()
         
-        if hasattr(client, 'get_chat_by_invite'):
-            chat_info = await client.get_chat_by_invite(invite_hash)
-        elif hasattr(client, 'resolve_invite'):
-            chat_info = await client.resolve_invite(invite_hash)
-        elif hasattr(client, 'get_chat'):
-            chat_info = await client.get_chat(link)
+        if not chats:
+            print("Список чатов пуст или не удалось получить данные.")
+            return
+
+        print(f"Найдено чатов: {len(chats)}\n")
+        
+        # Форматированный вывод в консоль и подготовка для файла
+        output_lines = []
+        header = f"{'ID ЧАТА':<22} | {'ТИП':<12} | {'НАЗВАНИЕ / ИМЯ'}"
+        divider = "=" * 65
+        
+        print(header)
+        print(divider)
+        
+        output_lines.append(header)
+        output_lines.append(divider)
+
+        for c in chats:
+            # Получаем ID чата
+            c_id = getattr(c, 'id', None) or getattr(c, 'chat_id', 'Неизвестен')
             
-        if chat_info:
-            chat_id = getattr(chat_info, 'id', getattr(chat_info, 'chat_id', 'Не найден'))
-            title = getattr(chat_info, 'title', getattr(chat_info, 'name', 'Без названия'))
+            # Получаем название или имя
+            title = getattr(c, 'title', None) or getattr(c, 'name', None)
+            first_name = getattr(c, 'first_name', '')
+            last_name = getattr(c, 'last_name', '')
             
-            print("================ РЕЗУЛЬТАТ ================")
-            print(f"Название чата: {title}")
-            print(f"TARGET_MAX_CHAT_ID: {chat_id}")
-            print("===========================================")
-            return chat_id
-        else:
-            print("Метод резолва вернул пустой ответ. Проверьте валидность ссылки.")
+            display_name = title or f"{first_name} {last_name}".strip() or "Без названия"
+            chat_type = str(getattr(c, 'type', '—'))
+
+            line = f"{str(c_id):<22} | {chat_type:<12} | {display_name}"
+            print(line)
+            output_lines.append(line)
+
+        print(divider)
+
+        # Сохранение результатов в txt файл
+        with open("my_chats.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(output_lines))
+            
+        print("\nПолный список также успешно сохранен в файл 'my_chats.txt'")
 
     except Exception as e:
-        print(f"Ошибка при запросе к API: {e}")
+        print(f"Произошла ошибка при получении чатов: {e}")
 
 
 if __name__ == "__main__":
-    asyncio.run(get_chat_id_from_link(INVITE_LINK))
+    asyncio.run(main())
