@@ -21,23 +21,34 @@ async def main():
     print(f"Подключение к Max ({MAX_PHONE})...")
     print("========================================")
 
-    await client.start()
-    print("Успешное подключение!\n")
+    # Запускаем клиент в фоновой задаче, чтобы он не блокировал скрипт
+    start_task = asyncio.create_task(client.start())
+    
+    # Ждем 3 секунды, чтобы завершилась синхронизация (Sync completed)
+    await asyncio.sleep(3)
+    print("Успешное подключение и синхронизация!\n")
 
     try:
-        # 1. Пробуем получить список диалогов/чатов через get_dialogs()
+        # Извлекаем синхронизированные диалоги из локального хранилища клиента
         dialogs = []
-        if hasattr(client, 'get_dialogs'):
-            dialogs = await client.get_dialogs()
-        elif hasattr(client, 'get_chats_list'):
-            dialogs = await client.get_chats_list()
+        
+        if hasattr(client, 'dialogs') and client.dialogs:
+            dialogs = list(client.dialogs.values()) if isinstance(client.dialogs, dict) else client.dialogs
+        elif hasattr(client, 'chats') and client.chats:
+            dialogs = list(client.chats.values()) if isinstance(client.chats, dict) else client.chats
 
         if not dialogs:
-            print("Не удалось автоматически получить диалоги или список пуст.")
+            print("Внимание: хранилище пусто. Пробуем альтернативный доступ...")
+            # Запасной вариант обращения к кэшу
+            if hasattr(client, '_dialogs'):
+                dialogs = list(client._dialogs.values())
+
+        if not dialogs:
+            print("Не удалось прочитать список из кэша.")
             return
 
         output_lines = []
-        header = f"{'ID ЧАТА':<22} | {'ТИП/СТАТУС':<12} | {'НАЗВАНИЕ / ИМЯ'}"
+        header = f"{'ID ЧАТА':<22} | {'ТИП':<10} | {'НАЗВАНИЕ / ИМЯ'}"
         divider = "=" * 65
 
         print(header)
@@ -45,19 +56,28 @@ async def main():
         output_lines.extend([header, divider])
 
         for item in dialogs:
-            # Извлекаем объект чата/пользователя из структуры диалога
+            # Извлекаем объект чата или юзера из элемента диалога
             chat_obj = getattr(item, 'chat', item)
+            user_obj = getattr(item, 'user', None)
             
-            c_id = getattr(chat_obj, 'id', None) or getattr(chat_obj, 'chat_id', 'Неизвестен')
+            # Определяем ID
+            c_id = (
+                getattr(chat_obj, 'id', None) 
+                or getattr(chat_obj, 'chat_id', None)
+                or getattr(item, 'id', 'Неизвестен')
+            )
             
+            # Определяем Название / Имя
             title = getattr(chat_obj, 'title', None) or getattr(chat_obj, 'name', None)
-            first_name = getattr(chat_obj, 'first_name', '')
-            last_name = getattr(chat_obj, 'last_name', '')
             
-            display_name = title or f"{first_name} {last_name}".strip() or "Без названия"
-            chat_type = str(getattr(chat_obj, 'type', '—'))
+            first_name = getattr(user_obj or chat_obj, 'first_name', '')
+            last_name = getattr(user_obj or chat_obj, 'last_name', '')
+            user_full_name = f"{first_name} {last_name}".strip()
+            
+            display_name = title or user_full_name or getattr(chat_obj, 'username', None) or "Без названия"
+            chat_type = str(getattr(chat_obj, 'type', 'GROUP' if title else 'USER'))
 
-            line = f"{str(c_id):<22} | {chat_type:<12} | {display_name}"
+            line = f"{str(c_id):<22} | {chat_type:<10} | {display_name}"
             print(line)
             output_lines.append(line)
 
@@ -69,7 +89,10 @@ async def main():
         print("\nСписок сохранен в файл 'my_chats.txt'")
 
     except Exception as e:
-        print(f"Произошла ошибка при получении чатов: {e}")
+        print(f"Ошибка при чтении списка: {e}")
+    finally:
+        # Отменяем фоновую задачу клиента перед выходом
+        start_task.cancel()
 
 
 if __name__ == "__main__":
